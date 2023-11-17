@@ -188,11 +188,6 @@ app.put("/:id", async (c) => {
     return c.json({ message: "note not found" });
   }
 
-  notes[foundIndex] = {
-    id: notes[foundIndex].id,
-    text: validatedData.text || notes[foundIndex].text,
-    date: new Date(validatedData.date || notes[foundIndex].date),
-  };
 
   try {
     await updateNote(notes[foundIndex].id, notes[foundIndex]);
