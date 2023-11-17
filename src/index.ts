@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { getSingleNoteSchema } from "./schema";
+import { getPaginatedNotesSchema, getSingleNoteSchema } from "./schema";
 import { updateNoteRequestSchema, createNoteRequestSchema } from "./schema";
 
 import {
@@ -12,6 +12,8 @@ import {
   deleteNote,
   getAll,
   getNote,
+  getNoteByText,
+  getPaginated,
   updateNote,
 } from "./notes";
 
@@ -29,18 +31,7 @@ app.use(
 );
 // CREATE
 app.post("/", async (c) => {
-  let data: unknown;
-
-  try {
-    data = await c.req.json();
-  } catch (error) {
-    console.error(error);
-    c.status(400);
-    return c.json({
-      success: false,
-      message: "Invalid JSON in the request",
-    });
-  }
+  const data = await c.req.json();
 
   const validation = createNoteRequestSchema.safeParse(data);
 
@@ -55,19 +46,19 @@ app.post("/", async (c) => {
   const validatedData = validation.data;
   let success = true;
   let message = "successfully retrieved";
-  let notes: Note[];
+  let note: Note | undefined;
 
   try {
-    notes = await getAll();
+  //const note = await getNoteByText(data.text)
   } catch (error) {
-    c.status(500);
+      c.status(500);
     success = false;
     message = "Error retriving notes.";
     console.error("Error connecting to DB.", error);
-    notes = [];
-    return c.json({ success, message, notes });
+ 
+    return c.json({ success, message});
   }
-  if (notes.find((x) => x.text === validatedData.text)) {
+  if (note) {
     return c.json({ message: "already exists" });
   }
 
@@ -85,8 +76,6 @@ app.post("/", async (c) => {
     c.status(500);
     return c.json({ success: false, message: "Error in updating the note" });
   }
-
-  notes.push(dbNote);
 
   return c.json({
     success,
@@ -170,27 +159,31 @@ app.put("/:id", async (c) => {
 
   let success = true;
   let message = "successfully retrieved";
-  let notes: Note[];
+  let note: Note | undefined;
   try {
-    notes = await getAll();
+    const found = await getNote( result.data )
+
+  if (!found) {
+    c.status(404);
+    return c.json({ message: "note not found" });
+  }
+    note = found
   } catch (error) {
     c.status(500);
     success = false;
     message = "Error retriving notes.";
     console.error("Error connecting to DB.", error);
-    notes = [];
-    return c.json({ success, message, notes });
-  }
-  const foundIndex = notes.findIndex((n) => n.id === id);
-
-  if (foundIndex === -1) {
-    c.status(404);
-    return c.json({ message: "note not found" });
+    return c.json({ success, message });
   }
 
+  note = {
+    id: note.id,
+    text: validatedData.text || note.text,
+    date: new Date(validatedData.date || note.date),
+  };
 
   try {
-    await updateNote(notes[foundIndex].id, notes[foundIndex]);
+    await updateNote(note.id, note);
   } catch (error) {
     console.error(error);
     c.status(500);
@@ -217,7 +210,12 @@ app.delete("/:id", async (c) => {
   let message = "successfully retrieved";
   let notes: Note[];
   try {
-    notes = await getAll();
+    const found = await getNote( result.data )
+
+  if (!found) {
+    c.status(404);
+    return c.json({ message: "note not found" });
+  }
   } catch (error) {
     c.status(500);
     success = false;
@@ -227,15 +225,7 @@ app.delete("/:id", async (c) => {
     return c.json({ success, message, notes });
   }
 
-  const foundIndex = notes.findIndex((n) => n.id === id);
-
-  if (foundIndex === -1) {
-    c.status(404);
-    return c.json({ message: "note not found" });
-  }
-
-  notes.splice(foundIndex, 1);
-
+   
   try {
     await deleteNote(id);
   } catch (error) {
@@ -253,8 +243,21 @@ app.get("/", async (c) => {
   let message = "successfully retrieved";
   let notes: Note[];
 
+  const limit = parseInt(c.req.query("limit") || "10");
+  const page = parseInt(c.req.query("page") || "1");
+
+  const result = getPaginatedNotesSchema.safeParse({ limit, page});
+
+  if (!result.success) {
+    c.status(400);
+    return c.json({
+      success: false,
+      message: JSON.parse(result.error.message)[0].message,
+    });
+  }
+
   try {
-    notes = await getAll();
+    notes = await getPaginated(result.data);
   } catch (error) {
     c.status(500);
     success = false;

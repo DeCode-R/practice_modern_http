@@ -36,6 +36,25 @@ export async function createNote(note: Partial<Note>): Promise<Note> {
 export async function getAll() {
   return await db.select().from(notesSchema).limit(10);
 }
+export async function getPaginated({
+  limit,
+  page,
+}:{
+  limit:number;
+  page:number;
+}
+){
+  const result = await db
+  .select()
+  .from(notesSchema)
+  .limit(limit)
+  .offset((page - 1) * limit);
+
+  console.log({ result });
+
+  return result;
+  
+}
 
 export async function deleteNote(id: number) {
   console.log(await db.delete(notesSchema).where(eq(notesSchema.id, id)));
@@ -44,6 +63,16 @@ export async function deleteNote(id: number) {
 export async function getNote(id: number): Promise<Note | undefined> {
   return (
     await db.select().from(notesSchema).where(eq(notesSchema.id, id)).limit(1)
+  )[0];
+}
+
+export async function getNoteByText(text :string): Promise<Note | undefined>{
+  return(
+    await db
+      .select()
+      .from(notesSchema)
+      .where(eq(notesSchema.text,text))
+      .limit(1)
   )[0];
 }
 
