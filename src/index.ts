@@ -10,7 +10,6 @@ import {
   Note,
   createNote,
   deleteNote,
-  getAll,
   getNote,
   getNoteByText,
   getPaginated,
@@ -29,6 +28,7 @@ app.use(
     origin: ["https://seen.red"],
   }),
 );
+
 // CREATE
 app.post("/", async (c) => {
   const data = await c.req.json();
@@ -39,7 +39,7 @@ app.post("/", async (c) => {
     c.status(400);
     return c.json({
       success: false,
-      message: JSON.parse(validation.error.message)[0],
+      message: validation.error.issues[0].message,
     });
   }
 
@@ -49,7 +49,7 @@ app.post("/", async (c) => {
   let note: Note | undefined;
 
   try {
-  //const note = await getNoteByText(data.text)
+ note = await getNoteByText(data.text)
   } catch (error) {
       c.status(500);
     success = false;
@@ -244,20 +244,23 @@ app.get("/", async (c) => {
   let notes: Note[];
 
   const limit = parseInt(c.req.query("limit") || "10");
-  const page = parseInt(c.req.query("page") || "1");
+  const page = parseInt(c.req.query("page") || "0");
+  const id = parseInt(c.req.query("id") || "0");
 
-  const result = getPaginatedNotesSchema.safeParse({ limit, page});
+  const result = getPaginatedNotesSchema.safeParse({ limit, page, id });
 
   if (!result.success) {
     c.status(400);
     return c.json({
       success: false,
-      message: JSON.parse(result.error.message)[0].message,
+      message: result.error.issues[0]
     });
   }
 
   try {
-    notes = await getPaginated(result.data);
+    notes = await getPaginated(
+      result.data as Parameters<typeof getPaginated>[0],
+    );
   } catch (error) {
     c.status(500);
     success = false;
