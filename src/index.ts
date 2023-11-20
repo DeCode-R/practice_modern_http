@@ -1,8 +1,11 @@
-import { serve } from "@hono/node-server";
+import { getRequestListener, serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
+//import { cors } from "hono/cors";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
+import { createServer } from "node:http";
+//import { secureHeaders } from "hono/secure-headers";
 import { getPaginatedNotesSchema, getSingleNoteSchema } from "./schema";
 import { updateNoteRequestSchema, createNoteRequestSchema } from "./schema";
 
@@ -15,7 +18,7 @@ import {
   getPaginated,
   updateNote,
 } from "./notes";
-
+import { rateLimit } from "./rate-limit";
 const app = new Hono();
 
 app.use("*", secureHeaders());
@@ -271,4 +274,18 @@ app.get("/", async (c) => {
 
   return c.json({ success, message, notes });
 });
-serve(app);
+serve({
+  fetch: app.fetch,
+  createServer: () => {
+    const rateLimiter = rateLimit();
+
+    const server = createServer((req, res) => {
+      if (rateLimiter.passed({ req, res })) {
+        const requestListener = getRequestListener(app.fetch);
+        requestListener(req, res);
+      }
+    });
+
+    return server;
+  },
+});
